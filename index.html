@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Cyber Block Breaker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #05050d;
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .neon-text-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.7), 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+
+        .neon-text-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.7), 0 0 20px rgba(255, 0, 127, 0.5);
+        }
+
+        .neon-box-cyan {
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 10px rgba(0, 243, 255, 0.2);
+            border: 1px solid rgba(0, 243, 255, 0.6);
+        }
+
+        .cyber-btn {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.2) 0%, rgba(255, 0, 127, 0.2) 100%);
+            border: 1px solid rgba(0, 243, 255, 0.8);
+            transition: all 0.2s ease;
+        }
+
+        .cyber-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.5) 0%, rgba(255, 0, 127, 0.5) 100%);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .cyber-btn:active {
+            transform: translateY(1px);
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="w-full h-screen overflow-hidden flex flex-col justify-between">
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer" class="flex flex-col justify-between p-4 md:p-6">
+        <!-- Header / HUD -->
+        <div class="flex justify-between items-center w-full max-w-5xl mx-auto backdrop-blur-md bg-black/40 p-4 rounded-xl border border-cyan-500/30">
+            <!-- Score & Combo -->
+            <div class="flex items-center gap-6">
+                <div>
+                    <div class="text-xs text-cyan-400 font-orbitron tracking-widest uppercase">SCORE</div>
+                    <div id="score-text" class="text-2xl md:text-3xl font-orbitron font-bold text-white neon-text-cyan">0</div>
+                </div>
+                <div>
+                    <div class="text-xs text-pink-400 font-orbitron tracking-widest uppercase">COMBO</div>
+                    <div id="combo-text" class="text-xl md:text-2xl font-orbitron font-bold text-pink-500 neon-text-pink">x1</div>
+                </div>
+            </div>
+
+            <!-- Stage Title / Level -->
+            <div class="text-center hidden sm:block">
+                <div class="text-xs text-cyan-400 font-orbitron tracking-widest uppercase">STAGE</div>
+                <div id="level-text" class="text-xl font-orbitron font-bold text-cyan-300">STAGE 1</div>
+            </div>
+
+            <!-- Lives & Controls -->
+            <div class="flex items-center gap-4">
+                <div>
+                    <div class="text-xs text-pink-400 font-orbitron tracking-widest uppercase text-right">LIVES</div>
+                    <div id="lives-container" class="flex gap-1 text-pink-500 text-lg md:text-xl">
+                        <i class="fa-solid fa-heart"></i>
+                        <i class="fa-solid fa-heart"></i>
+                        <i class="fa-solid fa-heart"></i>
+                    </div>
+                </div>
+                <button id="sound-btn" class="interactive ml-2 w-10 h-10 rounded-lg bg-cyan-950/60 border border-cyan-500/50 flex items-center justify-center text-cyan-400 hover:bg-cyan-800/50 transition">
+                    <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Power-up Active Indicator Container -->
+        <div id="active-powers" class="flex justify-center gap-2 my-2 pointer-events-none"></div>
+
+        <!-- Bottom Controls / Mobile Touch Areas -->
+        <div class="w-full flex justify-between items-end pb-2 md:pb-4">
+            <!-- Start / Overlay Screens -->
+        </div>
+    </div>
+
+    <div id="start-modal" class="fixed inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="max-w-md w-full bg-slate-950/90 border-2 border-cyan-500/80 rounded-2xl p-6 md:p-8 text-center neon-box-cyan relative overflow-hidden">
+            <div class="absolute -top-10 -left-10 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-pink-500/20 rounded-full blur-2xl"></div>
+
+            <h1 class="text-3xl md:text-4xl font-black font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-pink-500 mb-2 tracking-wider">
+                CYBER STRIKE
+            </h1>
+            <p class="text-cyan-400 text-sm font-orbitron mb-6 tracking-widest">3D BLOCK BREAKER</p>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-4 mb-6 text-left text-xs md:text-sm text-slate-300 space-y-2">
+                <p class="flex items-center gap-2"><i class="fa-solid fa-mouse text-cyan-400"></i> マウス / タッチ: パドル移動</p>
+                <p class="flex items-center gap-2"><i class="fa-solid fa-keyboard text-cyan-400"></i> 矢印キー [←][→] / [A][D]: パドル移動</p>
+                <p class="flex items-center gap-2"><i class="fa-solid fa-bolt text-yellow-400"></i> パワーアップを取得してステージクリアを目指せ！</p>
+            </div>
+
+            <button id="start-btn" class="cyber-btn w-full py-3 md:py-4 rounded-xl font-orbitron font-bold text-lg text-white tracking-widest cursor-pointer">
+                GAME START
+            </button>
+        </div>
+    </div>
+
+    <div id="game-modal" class="fixed inset-0 z-20 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+        <div class="max-w-md w-full bg-slate-950/90 border-2 border-pink-500/80 rounded-2xl p-6 md:p-8 text-center relative overflow-hidden">
+            <h2 id="modal-title" class="text-3xl md:text-4xl font-black font-orbitron text-pink-500 neon-text-pink mb-2">GAME OVER</h2>
+            <p id="modal-subtitle" class="text-slate-400 text-sm mb-6">Cyber Core Depleted</p>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-lg p-4 mb-6 space-y-3">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">FINAL SCORE</span>
+                    <span id="final-score" class="text-2xl font-orbitron font-bold text-cyan-400">0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">MAX COMBO</span>
+                    <span id="max-combo" class="text-lg font-orbitron font-bold text-pink-400">x1</span>
+                </div>
+            </div>
+
+            <button id="restart-btn" class="cyber-btn w-full py-3 md:py-4 rounded-xl font-orbitron font-bold text-lg text-white tracking-widest cursor-pointer">
+                PLAY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <script>
+        class AudioEngine {
+            constructor() {
+                this.initialized = false;
+                this.muted = false;
+                this.synth = null;
+                this.polySynth = null;
+            }
+
+            async init() {
+                if (this.initialized) return;
+                try {
+                    await Tone.start();
+                    this.synth = new Tone.Synth({
+                        oscillator: { type: "triangle" },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.1 }
+                    }).toDestination();
+                    this.synth.volume.value = -12;
+
+                    this.polySynth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: "sawtooth" },
+                        envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.3 }
+                    }).toDestination();
+                    this.polySynth.volume.value = -16;
+
+                    this.initialized = true;
+                } catch (e) {
+                    console.error("Audio initialization error:", e);
+                }
+            }
+
+            playHitPaddle() {
+                if (!this.initialized || this.muted) return;
+                this.synth.triggerAttackRelease("C4", "16n");
+            }
+
+            playHitBlock(pitch = "G4") {
+                if (!this.initialized || this.muted) return;
+                this.synth.triggerAttackRelease(pitch, "16n");
+            }
+
+            playPowerup() {
+                if (!this.initialized || this.muted) return;
+                this.polySynth.triggerAttackRelease(["E5", "G5", "B5"], "8n");
+            }
+
+            playLaser() {
+                if (!this.initialized || this.muted) return;
+                this.synth.triggerAttackRelease("F6", "32n");
+            }
+
+            playLoseLife() {
+                if (!this.initialized || this.muted) return;
+                this.polySynth.triggerAttackRelease(["C3", "F#3"], "4n");
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                return this.muted;
+            }
+        }
+
+        const audio = new AudioEngine();
+
+        const GAME_BOUNDS = { x: 18, y: 26 };
+        const gameState = {
+            active: false,
+            score: 0,
+            combo: 0,
+            maxCombo: 0,
+            lives: 3,
+            level: 1,
+            paddleWidth: 5,
+            paddleX: 0,
+            hasBarrier: false,
+            laserPower: false,
+            balls: [],
+            blocks: [],
+            particles: [],
+            powerups: [],
+            lasers: []
+        };
+
+        let scene, camera, renderer;
+        let paddle, paddleLight, barrierMesh;
+        let keys = { left: false, right: false };
+        let mouseX = 0;
+
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x05050d, 0.018);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, -22, 22);
+            camera.lookAt(0, 4, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0x00f3ff, 0.8);
+            dirLight.position.set(10, -10, 30);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const dirLight2 = new THREE.DirectionalLight(0xff007f, 0.5);
+            dirLight2.position.set(-10, 20, 20);
+            scene.add(dirLight2);
+
+            // Playfield Arena Elements
+            createArena();
+
+            // Create Paddle
+            createPaddle();
+
+            // Event Listeners for Resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createArena() {
+            // Cyber Grid Floor
+            const gridHelper = new THREE.GridHelper(60, 60, 0x00f3ff, 0x112244);
+            gridHelper.rotation.x = Math.PI / 2;
+            gridHelper.position.z = -1;
+            scene.add(gridHelper);
+
+            // Side Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0x0a1128,
+                roughness: 0.2,
+                metalness: 0.8,
+                wireframe: false
+            });
+
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(1, GAME_BOUNDS.y * 2, 2), wallMaterial);
+            leftWall.position.set(-GAME_BOUNDS.x - 0.5, 0, 0);
+            scene.add(leftWall);
+
+            const rightWall = leftWall.clone();
+            rightWall.position.x = GAME_BOUNDS.x + 0.5;
+            scene.add(rightWall);
+
+            const topWall = new THREE.Mesh(new THREE.BoxGeometry(GAME_BOUNDS.x * 2 + 2, 1, 2), wallMaterial);
+            topWall.position.set(0, GAME_BOUNDS.y, 0);
+            scene.add(topWall);
+
+            // Border Neon Lines
+            createNeonLine(-GAME_BOUNDS.x, -GAME_BOUNDS.y, GAME_BOUNDS.x, -GAME_BOUNDS.y, 0xff0055); // Bottom death zone glow
+            createNeonLine(-GAME_BOUNDS.x, -GAME_BOUNDS.y, -GAME_BOUNDS.x, GAME_BOUNDS.y, 0x00f3ff);
+            createNeonLine(GAME_BOUNDS.x, -GAME_BOUNDS.y, GAME_BOUNDS.x, GAME_BOUNDS.y, 0x00f3ff);
+            createNeonLine(-GAME_BOUNDS.x, GAME_BOUNDS.y, GAME_BOUNDS.x, GAME_BOUNDS.y, 0x00f3ff);
+        }
+
+        function createNeonLine(x1, y1, x2, y2, colorHex) {
+            const points = [];
+            points.push(new THREE.Vector3(x1, y1, 0.5));
+            points.push(new THREE.Vector3(x2, y2, 0.5));
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2 });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+        }
+
+        function createPaddle() {
+            const geometry = new THREE.BoxGeometry(gameState.paddleWidth, 1, 1.2);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                roughness: 0.1,
+                metalness: 0.9,
+                emissive: 0x004466
+            });
+            paddle = new THREE.Mesh(geometry, material);
+            paddle.position.set(0, -GAME_BOUNDS.y + 3, 0.6);
+            scene.add(paddle);
+
+            paddleLight = new THREE.PointLight(0x00f3ff, 2, 8);
+            paddleLight.position.set(0, 0, 1);
+            paddle.add(paddleLight);
+
+            // Bottom Protection Barrier Mesh (Disabled by default)
+            const barrierGeo = new THREE.BoxGeometry(GAME_BOUNDS.x * 2, 0.5, 0.5);
+            const barrierMat = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            barrierMesh = new THREE.Mesh(barrierGeo, barrierMat);
+            barrierMesh.position.set(0, -GAME_BOUNDS.y + 0.5, 0.5);
+            barrierMesh.visible = false;
+            scene.add(barrierMesh);
+        }
+
+        function createBall(x = 0, y = -GAME_BOUNDS.y + 5, vx = (Math.random() - 0.5) * 10, vy = 16) {
+            const geometry = new THREE.SphereGeometry(0.6, 32, 32);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 0.8,
+                roughness: 0.1,
+                metalness: 0.9
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, 0.6);
+
+            const light = new THREE.PointLight(0x00f3ff, 1.5, 6);
+            mesh.add(light);
+
+            scene.add(mesh);
+
+            const ball = {
+                mesh: mesh,
+                velocity: new THREE.Vector2(vx, vy),
+                speed: Math.sqrt(vx * vx + vy * vy)
+            };
+            gameState.balls.push(ball);
+            return ball;
+        }
+
+        const BLOCK_COLORS = [
+            { color: 0xff0055, hp: 1, points: 100 }, // Pink
+            { color: 0x00f3ff, hp: 1, points: 120 }, // Cyan
+            { color: 0xffaa00, hp: 2, points: 250 }, // Gold/Orange
+            { color: 0xaa00ff, hp: 3, points: 400 }  // Purple
+        ];
+
+        function generateStage(level) {
+            // Clear existing blocks
+            gameState.blocks.forEach(b => scene.remove(b.mesh));
+            gameState.blocks = [];
+
+            const rows = Math.min(4 + level, 8);
+            const cols = 10;
+            const blockWidth = (GAME_BOUNDS.x * 2 - 4) / cols;
+            const blockHeight = 1.2;
+            const startY = GAME_BOUNDS.y - 4;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    // Pattern generator
+                    if ((r + c + level) % 5 === 0 && level > 1) continue; // Dynamic gaps
+
+                    const typeIndex = (r + level) % BLOCK_COLORS.length;
+                    const type = BLOCK_COLORS[typeIndex];
+
+                    const geo = new THREE.BoxGeometry(blockWidth - 0.2, blockHeight - 0.2, 1);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: type.color,
+                        roughness: 0.2,
+                        metalness: 0.7,
+                        emissive: type.color,
+                        emissiveIntensity: 0.3
+                    });
+
+                    const mesh = new THREE.Mesh(geo, mat);
+                    const x = -GAME_BOUNDS.x + 2 + c * blockWidth + blockWidth / 2;
+                    const y = startY - r * blockHeight;
+                    mesh.position.set(x, y, 0.6);
+
+                    scene.add(mesh);
+
+                    gameState.blocks.push({
+                        mesh: mesh,
+                        type: type,
+                        hp: type.hp,
+                        maxHp: type.hp,
+                        width: blockWidth - 0.2,
+                        height: blockHeight - 0.2,
+                        x: x,
+                        y: y
+                    });
+                }
+            }
+        }
+
+        const POWERUP_TYPES = [
+            { id: 'MULTIBALL', icon: 'fa-cubes', color: 0x00f3ff, text: 'MULTI-BALL' },
+            { id: 'WIDE', icon: 'fa-arrows-left-right', color: 0x00ff88, text: 'WIDE PADDLE' },
+            { id: 'BARRIER', icon: 'fa-shield-halved', color: 0xffa00, text: 'BARRIER' },
+            { id: 'LASER', icon: 'fa-bolt', color: 0xff0055, text: 'LASER CANNON' }
+        ];
+
+        function spawnPowerup(x, y) {
+            if (Math.random() > 0.35) return; // 35% drop chance
+
+            const pType = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+            const geo = new THREE.OctahedronGeometry(0.7);
+            const mat = new THREE.MeshStandardMaterial({
+                color: pType.color,
+                emissive: pType.color,
+                emissiveIntensity: 0.6,
+                roughness: 0.1
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, 0.6);
+            scene.add(mesh);
+
+            gameState.powerups.push({
+                mesh: mesh,
+                type: pType,
+                y: y,
+                x: x
+            });
+        }
+
+        function activatePowerup(type) {
+            audio.playPowerup();
+            showPowerupBadge(type);
+
+            switch (type.id) {
+                case 'MULTIBALL':
+                    const currentBalls = [...gameState.balls];
+                    currentBalls.forEach(b => {
+                        createBall(b.mesh.position.x, b.mesh.position.y, b.velocity.x * 0.8 + 4, b.velocity.y * 0.8);
+                        createBall(b.mesh.position.x, b.mesh.position.y, -b.velocity.x * 0.8 - 4, b.velocity.y * 0.8);
+                    });
+                    break;
+                case 'WIDE':
+                    gameState.paddleWidth = 8;
+                    paddle.scale.set(1.6, 1, 1);
+                    setTimeout(() => {
+                        gameState.paddleWidth = 5;
+                        paddle.scale.set(1, 1, 1);
+                    }, 10000);
+                    break;
+                case 'BARRIER':
+                    gameState.hasBarrier = true;
+                    barrierMesh.visible = true;
+                    break;
+                case 'LASER':
+                    gameState.laserPower = true;
+                    setTimeout(() => { gameState.laserPower = false; }, 8000);
+                    break;
+            }
+        }
+
+        function showPowerupBadge(type) {
+            const container = document.getElementById('active-powers');
+            const badge = document.createElement('div');
+            badge.className = 'px-3 py-1 rounded-full bg-slate-900/80 border border-cyan-400/50 text-cyan-300 text-xs font-orbitron flex items-center gap-1.5 animate-bounce';
+            badge.innerHTML = `<i class="fa-solid ${type.icon}"></i> ${type.text}`;
+            container.appendChild(badge);
+
+            setTimeout(() => {
+                badge.remove();
+            }, 5000);
+        }
+
+        function createExplosion(x, y, colorHex, count = 15) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+                const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+                const p = new THREE.Mesh(geo, mat);
+                p.position.set(x, y, 0.6);
+
+                const vx = (Math.random() - 0.5) * 12;
+                const vy = (Math.random() - 0.5) * 12;
+                const vz = (Math.random() - 0.2) * 8;
+
+                scene.add(p);
+                gameState.particles.push({ mesh: p, vx, vy, vz, life: 1.0 });
+            }
+        }
+
+        function fireLaser() {
+            if (!gameState.laserPower || !gameState.active) return;
+
+            audio.playLaser();
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+            const geo = new THREE.CylinderGeometry(0.1, 0.1, 1.5);
+
+            const l1 = new THREE.Mesh(geo, mat);
+            const l2 = new THREE.Mesh(geo, mat);
+
+            l1.position.set(gameState.paddleX - gameState.paddleWidth / 2.2, paddle.position.y + 0.8, 0.6);
+            l2.position.set(gameState.paddleX + gameState.paddleWidth / 2.2, paddle.position.y + 0.8, 0.6);
+
+            scene.add(l1);
+            scene.add(l2);
+
+            gameState.lasers.push({ mesh: l1, y: l1.position.y, x: l1.position.x });
+            gameState.lasers.push({ mesh: l2, y: l2.position.y, x: l2.position.x });
+        }
+
+        function setupInputs() {
+            // Keyboard Controls
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+                if (e.key === ' ' && gameState.laserPower) fireLaser();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            });
+
+            // Pointer / Touch Controls
+            window.addEventListener('pointermove', (e) => {
+                const normX = (e.clientX / window.innerWidth) * 2 - 1;
+                gameState.paddleX = normX * GAME_BOUNDS.x;
+            });
+
+            window.addEventListener('pointerdown', () => {
+                if (gameState.laserPower) fireLaser();
+            });
+        }
+
+        let lastTime = performance.now();
+
+        function updateGame() {
+            if (!gameState.active) return;
+
+            const now = performance.now();
+            const delta = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            // Update Paddle Position via Keyboard Keyboard
+            const paddleSpeed = 28;
+            if (keys.left) gameState.paddleX -= paddleSpeed * delta;
+            if (keys.right) gameState.paddleX += paddleSpeed * delta;
+
+            // Clamp Paddle inside arena
+            const maxX = GAME_BOUNDS.x - gameState.paddleWidth / 2;
+            gameState.paddleX = Math.max(-maxX, Math.min(maxX, gameState.paddleX));
+            paddle.position.x = gameState.paddleX;
+
+            // 1. Update Laser Bullets
+            for (let i = gameState.lasers.length - 1; i >= 0; i--) {
+                const laser = gameState.lasers[i];
+                laser.mesh.position.y += 35 * delta;
+
+                // Check collision with blocks
+                let laserHit = false;
+                for (let j = gameState.blocks.length - 1; j >= 0; j--) {
+                    const block = gameState.blocks[j];
+                    if (Math.abs(laser.mesh.position.x - block.x) < block.width / 2 &&
+                        Math.abs(laser.mesh.position.y - block.y) < block.height / 2) {
+
+                        damageBlock(block, j);
+                        laserHit = true;
+                        break;
+                    }
+                }
+
+                if (laserHit || laser.mesh.position.y > GAME_BOUNDS.y) {
+                    scene.remove(laser.mesh);
+                    gameState.lasers.splice(i, 1);
+                }
+            }
+
+            // 2. Update Balls Physics
+            for (let bIndex = gameState.balls.length - 1; bIndex >= 0; bIndex--) {
+                const ball = gameState.balls[bIndex];
+                const pos = ball.mesh.position;
+                const vel = ball.velocity;
+
+                pos.x += vel.x * delta;
+                pos.y += vel.y * delta;
+
+                // Wall Collisions
+                if (pos.x - 0.6 < -GAME_BOUNDS.x) { pos.x = -GAME_BOUNDS.x + 0.6; vel.x *= -1; }
+                if (pos.x + 0.6 > GAME_BOUNDS.x) { pos.x = GAME_BOUNDS.x - 0.6; vel.x *= -1; }
+                if (pos.y + 0.6 > GAME_BOUNDS.y) { pos.y = GAME_BOUNDS.y - 0.6; vel.y *= -1; }
+
+                // Paddle Collision
+                if (pos.y - 0.6 <= paddle.position.y + 0.6 &&
+                    pos.y + 0.6 >= paddle.position.y - 0.6 &&
+                    Math.abs(pos.x - paddle.position.x) <= gameState.paddleWidth / 2 + 0.4) {
+
+                    audio.playHitPaddle();
+                    pos.y = paddle.position.y + 0.6 + 0.1;
+
+                    // Calculate bounce angle depending on hit location
+                    const hitOffset = (pos.x - paddle.position.x) / (gameState.paddleWidth / 2);
+                    const speed = vel.length() * 1.01; // Slightly increase speed
+                    const maxAngle = Math.PI / 3; // 60 deg max angle
+                    const bounceAngle = hitOffset * maxAngle;
+
+                    vel.x = Math.sin(bounceAngle) * speed;
+                    vel.y = Math.cos(bounceAngle) * speed;
+                }
+
+                // Barrier Bottom Shield Collision
+                if (gameState.hasBarrier && pos.y - 0.6 <= -GAME_BOUNDS.y + 1) {
+                    vel.y *= -1;
+                    gameState.hasBarrier = false;
+                    barrierMesh.visible = false;
+                    audio.playHitPaddle();
+                }
+
+                // Ball Missed / Lost
+                if (pos.y < -GAME_BOUNDS.y - 2) {
+                    scene.remove(ball.mesh);
+                    gameState.balls.splice(bIndex, 1);
+                    continue;
+                }
+
+                // Block Collisions
+                for (let j = gameState.blocks.length - 1; j >= 0; j--) {
+                    const block = gameState.blocks[j];
+                    if (Math.abs(pos.x - block.x) < block.width / 2 + 0.5 &&
+                        Math.abs(pos.y - block.y) < block.height / 2 + 0.5) {
+
+                        // Reverse trajectory
+                        vel.y *= -1;
+
+                        audio.playHitBlock();
+                        damageBlock(block, j);
+                        break;
+                    }
+                }
+            }
+
+            // If all balls lost, deduct life
+            if (gameState.balls.length === 0) {
+                audio.playLoseLife();
+                gameState.lives--;
+                updateLivesUI();
+
+                if (gameState.lives <= 0) {
+                    endGame(false);
+                    return;
+                } else {
+                    // Respawn ball
+                    createBall(gameState.paddleX, -GAME_BOUNDS.y + 5, (Math.random() - 0.5) * 8, 16);
+                }
+            }
+
+            // 3. Update Power-ups
+            for (let i = gameState.powerups.length - 1; i >= 0; i--) {
+                const pow = gameState.powerups[i];
+                pow.mesh.position.y -= 7 * delta;
+                pow.mesh.rotation.y += 3 * delta;
+
+                // Paddle Collect
+                if (Math.abs(pow.mesh.position.x - paddle.position.x) < gameState.paddleWidth / 2 + 0.5 &&
+                    Math.abs(pow.mesh.position.y - paddle.position.y) < 1.0) {
+
+                    activatePowerup(pow.type);
+                    scene.remove(pow.mesh);
+                    gameState.powerups.splice(i, 1);
+                    continue;
+                }
+
+                // Fall Out of Screen
+                if (pow.mesh.position.y < -GAME_BOUNDS.y) {
+                    scene.remove(pow.mesh);
+                    gameState.powerups.splice(i, 1);
+                }
+            }
+
+            // 4. Update Particle Effects
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const p = gameState.particles[i];
+                p.life -= delta * 2;
+                p.mesh.position.x += p.vx * delta;
+                p.mesh.position.y += p.vy * delta;
+                p.mesh.position.z += p.vz * delta;
+                p.mesh.scale.setScalar(p.life);
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    gameState.particles.splice(i, 1);
+                }
+            }
+
+            // Stage Cleared Check
+            if (gameState.blocks.length === 0) {
+                gameState.level++;
+                document.getElementById('level-text').innerText = `STAGE ${gameState.level}`;
+                generateStage(gameState.level);
+                // Reset ball
+                gameState.balls.forEach(b => scene.remove(b.mesh));
+                gameState.balls = [];
+                createBall();
+            }
+        }
+
+        function damageBlock(block, index) {
+            block.hp--;
+            createExplosion(block.x, block.y, block.type.color, 10);
+
+            // Update Combo & Score
+            gameState.combo++;
+            if (gameState.combo > gameState.maxCombo) gameState.maxCombo = gameState.combo;
+            gameState.score += block.type.points * gameState.combo;
+
+            updateScoreUI();
+
+            if (block.hp <= 0) {
+                scene.remove(block.mesh);
+                gameState.blocks.splice(index, 1);
+                spawnPowerup(block.x, block.y);
+            } else {
+                // Flash damage color
+                block.mesh.material.emissiveIntensity = 1.0;
+                setTimeout(() => { if (block.mesh) block.mesh.material.emissiveIntensity = 0.3; }, 100);
+            }
+        }
+
+        function updateScoreUI() {
+            document.getElementById('score-text').innerText = gameState.score;
+            document.getElementById('combo-text').innerText = `x${gameState.combo}`;
+        }
+
+        function updateLivesUI() {
+            const container = document.getElementById('lives-container');
+            container.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < gameState.lives) {
+                    container.innerHTML += '<i class="fa-solid fa-heart"></i>';
+                } else {
+                    container.innerHTML += '<i class="fa-regular fa-heart opacity-30"></i>';
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateGame();
+            renderer.render(scene, camera);
+        }
+
+        function startGame() {
+            audio.init();
+            gameState.active = true;
+            gameState.score = 0;
+            gameState.combo = 0;
+            gameState.maxCombo = 0;
+            gameState.lives = 3;
+            gameState.level = 1;
+            gameState.hasBarrier = false;
+            gameState.laserPower = false;
+
+            updateScoreUI();
+            updateLivesUI();
+
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('game-modal').classList.add('hidden');
+
+            // Reset arena and entities
+            generateStage(1);
+            gameState.balls.forEach(b => scene.remove(b.mesh));
+            gameState.balls = [];
+            createBall();
+        }
+
+        function endGame(isWin) {
+            gameState.active = false;
+
+            document.getElementById('modal-title').innerText = isWin ? "STAGE CLEARED!" : "GAME OVER";
+            document.getElementById('modal-subtitle').innerText = isWin ? "Outstanding Performance" : "Cyber Core Depleted";
+            document.getElementById('final-score').innerText = gameState.score;
+            document.getElementById('max-combo').innerText = `x${gameState.maxCombo}`;
+
+            document.getElementById('game-modal').classList.remove('hidden');
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = function() {
+            initThree();
+            setupInputs();
+
+            // Modal Button Listeners
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', startGame);
+
+            // Mute Button Handler
+            document.getElementById('sound-btn').addEventListener('click', () => {
+                const muted = audio.toggleMute();
+                const icon = document.getElementById('sound-icon');
+                if (muted) {
+                    icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+                } else {
+                    icon.className = 'fa-solid fa-volume-high text-cyan-400';
+                }
+            });
+
+            // Start Animation Loop
+            animate();
+        };
+    </script>
+</body>
+</html>
